@@ -133,11 +133,13 @@
                 possibleLetters[possible[i]] = new(possible[i]);
             Console.WriteLine("Calculating Best Wordle Starter...");
             Stopwatch totalTime = Stopwatch.StartNew();
-            Dictionary<string, double> ratings = new(all.Count);
+            //Dictionary<string, double> ratings = new(all.Count);
+            File.WriteAllText("ratings.csv", "word;success_rate;average_depth;time(s)\n");
             for (int j = 0; j < all.Count; j++)
             {
                 string word = all[j];
-                double rating = 0;
+                double succes = 0;
+                double avr = 0;
                 Stopwatch wordTime = Stopwatch.StartNew();
                 for (int i = 1; i < possible.Count; i++)
                 {
@@ -147,20 +149,25 @@
                     double elapsedSecondsTotal = totalTime.Elapsed.TotalSeconds;
                     TimeSpan eta = TimeSpan.FromSeconds((elapsedSecondsTotal / (((double)i / possible.Count) + j) * all.Count) - elapsedSecondsTotal);
                     Console.WriteLine($"Trying starter \"{word}\" (Testing word: \"{correct}\"). Progress: {i * 100 / possible.Count}% (ETA Starter: {TimeSpan.FromSeconds((elapsedSecondsWord / i * possible.Count) - elapsedSecondsWord):hh\\:mm\\:ss} Total: {eta.Days}d {eta:hh\\:mm\\:ss})       ");
-                    rating += RateStarter(word, (correct, possibleLetters![correct], [.. possible[..i], .. possible[(i + 1)..]]), 0);
+                    (float a, float b) = RateStarter(word, (correct, possibleLetters![correct], [.. possible[..i], .. possible[(i + 1)..]]), 0);
+                    succes += a;
+                    avr += b;
                 }
-                ratings[word] = rating / possible.Count;
-                string write = $"Rating for {word}: {ratings[word]} completed in {wordTime.Elapsed.TotalSeconds} seconds";
+                succes /= possible.Count;
+                avr /= possible.Count;
+                avr++;
+                string write = $"Rating for {word}: Succes rate {succes} Average depth {avr} completed in {wordTime.Elapsed.TotalSeconds} seconds";
                 if (write.Length < 70)
                     write += new string(' ', 70 - write.Length);
                 Console.WriteLine(write);
+                File.AppendAllText("ratings.csv", $"{word};{succes};{avr};{wordTime.Elapsed.TotalSeconds}\n");
             }
         }
 
-        private static float RateStarter(string newWord, (string word, CharDictionary letters, List<string> possible) correct, int depth)
+        private static (float, float) RateStarter(string newWord, (string word, CharDictionary letters, List<string> possible) correct, int depth)
         {
             if (depth == 6)
-                return 0;
+                return (0, 5);
             knownLetters.Clear();
             grey.Clear();
             yellow.Clear();
@@ -179,7 +186,6 @@
                 else
                     grey.Add(c);
             }
-            float succes = 1;
             for (int i = 0; i < correct.possible.Count;)
             {
                 string word = correct.possible[i];
@@ -188,9 +194,15 @@
                 else
                     i++;
             }
+            float succes = 1;
+            float avr = depth;
             foreach (string word in correct.possible)
-                succes += RateStarter(word, (correct.word, correct.letters, [.. correct.possible]), depth + 1);
-            return succes / (correct.possible.Count + 1);
+            {
+                (float a, float b) = RateStarter(word, (correct.word, correct.letters, [.. correct.possible]), depth + 1);
+                succes += a;
+                avr += b;
+            }
+            return (succes / (correct.possible.Count + 1), avr / (correct.possible.Count + 1));
         }
 
         private static List<string> GetAll()
