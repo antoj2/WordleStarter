@@ -126,7 +126,6 @@
 
         static void Main(string[] args)
         {
-            Console.WriteLine("Locating files");
             List<string> all = GetAll();
             possible[0] = File.ReadAllLines("possible.txt");
             possible[1] = new string[possible[0].Length];
@@ -137,9 +136,7 @@
             possibleLetters = new Dictionary<string, CharDictionary>(possible.Length);
             for (int i = 0; i < possible[0].Length; i++)
                 possibleLetters[possible[0][i]] = new(possible[0][i]);
-            Console.WriteLine("Calculating Best Wordle Starter...");
             Stopwatch totalTime = Stopwatch.StartNew();
-            File.WriteAllText("ratings.csv", "word;success_rate;average_depth;time(s)\n");
             for (int j = 0; j < all.Count; j++)
             {
                 string word = all[j];
@@ -149,7 +146,7 @@
                 for (int i = 0; i < possible[0].Length; i++)
                 {
                     string correct = possible[0][i];
-                    Console.SetCursorPosition(0, 2);
+                    Console.SetCursorPosition(0, 0);
                     double elapsedSecondsWord = wordTime.Elapsed.TotalSeconds;
                     double elapsedSecondsTotal = totalTime.Elapsed.TotalSeconds;
                     TimeSpan eta = TimeSpan.FromSeconds((elapsedSecondsTotal / (((double)(i + 1) / possible[0].Length) + j) * all.Count) - elapsedSecondsTotal);
@@ -161,8 +158,8 @@
                 succes /= possible[0].Length;
                 avr /= possible[0].Length;
                 string write = $"Rating for {word}: Succes rate {succes} Average depth {avr} completed in {wordTime.Elapsed.TotalSeconds} seconds";
-                if (write.Length < 70)
-                    write += new string(' ', 70 - write.Length);
+                if (write.Length < 114)
+                    write += new string(' ', 114 - write.Length);
                 Console.WriteLine(write);
                 File.AppendAllText("ratings.csv", $"{word};{succes};{avr};{wordTime.Elapsed.TotalSeconds}\n");
             }
@@ -213,10 +210,15 @@
 
         private static List<string> GetAll()
         {
+            if (!File.Exists("ratings.csv"))
+                File.WriteAllText("ratings.csv", "word;success_rate;average_depth;time(s)\n");
+            HashSet<string> filter = [.. File.ReadLines("ratings.csv").Skip(1).Select(line => line.Split(';')[0])];
             string[] allFile = File.ReadAllLines("all.txt");
             List<string> all = [];
             foreach (string word in allFile)
             {
+                if (filter.Contains(word))
+                    continue;
                 int mask = 0;
                 bool good = true;
                 foreach (char c in word)
