@@ -122,18 +122,23 @@
         static readonly Yellow yellow = new();
         static readonly Green green = new();
         static Dictionary<string, CharDictionary>? possibleLetters;
+        static readonly string[][] possible = new string[6][];
 
         static void Main(string[] args)
         {
             Console.WriteLine("Locating files");
             List<string> all = GetAll();
-            List<string> possible = [.. File.ReadAllLines("possible.txt")];
-            possibleLetters = new Dictionary<string, CharDictionary>(possible.Count);
-            for (int i = 0; i < possible.Count; i++)
-                possibleLetters[possible[i]] = new(possible[i]);
+            possible[0] = File.ReadAllLines("possible.txt");
+            possible[1] = new string[possible[0].Length];
+            possible[2] = new string[possible[0].Length];
+            possible[3] = new string[possible[0].Length];
+            possible[4] = new string[possible[0].Length];
+            possible[5] = new string[possible[0].Length];
+            possibleLetters = new Dictionary<string, CharDictionary>(possible.Length);
+            for (int i = 0; i < possible[0].Length; i++)
+                possibleLetters[possible[0][i]] = new(possible[0][i]);
             Console.WriteLine("Calculating Best Wordle Starter...");
             Stopwatch totalTime = Stopwatch.StartNew();
-            //Dictionary<string, double> ratings = new(all.Count);
             File.WriteAllText("ratings.csv", "word;success_rate;average_depth;time(s)\n");
             for (int j = 0; j < all.Count; j++)
             {
@@ -141,21 +146,20 @@
                 double succes = 0;
                 double avr = 0;
                 Stopwatch wordTime = Stopwatch.StartNew();
-                for (int i = 1; i < possible.Count; i++)
+                for (int i = 0; i < possible[0].Length; i++)
                 {
-                    string correct = possible[i];
+                    string correct = possible[0][i];
                     Console.SetCursorPosition(0, 2);
                     double elapsedSecondsWord = wordTime.Elapsed.TotalSeconds;
                     double elapsedSecondsTotal = totalTime.Elapsed.TotalSeconds;
-                    TimeSpan eta = TimeSpan.FromSeconds((elapsedSecondsTotal / (((double)i / possible.Count) + j) * all.Count) - elapsedSecondsTotal);
-                    Console.WriteLine($"Trying starter \"{word}\" (Testing word: \"{correct}\"). Progress: {i * 100 / possible.Count}% (ETA Starter: {TimeSpan.FromSeconds((elapsedSecondsWord / i * possible.Count) - elapsedSecondsWord):hh\\:mm\\:ss} Total: {eta.Days}d {eta:hh\\:mm\\:ss})       ");
-                    (float a, float b) = RateStarter(word, (correct, possibleLetters![correct], [.. possible[..i], .. possible[(i + 1)..]]), 0);
+                    TimeSpan eta = TimeSpan.FromSeconds((elapsedSecondsTotal / (((double)(i + 1) / possible[0].Length) + j) * all.Count) - elapsedSecondsTotal);
+                    Console.WriteLine($"Trying starter \"{word}\" (Testing word: \"{correct}\"). Progress: {i * 100 / possible[0].Length}% (ETA Starter: {TimeSpan.FromSeconds((elapsedSecondsWord / (i + 1) * possible[0].Length) - elapsedSecondsWord):hh\\:mm\\:ss} Total: {eta.Days}d {eta:hh\\:mm\\:ss})       ");
+                    (float a, float b) = RateStarter(word, possible[0].Length, correct, possibleLetters![correct], 1);
                     succes += a;
                     avr += b;
                 }
-                succes /= possible.Count;
-                avr /= possible.Count;
-                avr++;
+                succes /= possible[0].Length;
+                avr /= possible[0].Length;
                 string write = $"Rating for {word}: Succes rate {succes} Average depth {avr} completed in {wordTime.Elapsed.TotalSeconds} seconds";
                 if (write.Length < 70)
                     write += new string(' ', 70 - write.Length);
@@ -164,10 +168,10 @@
             }
         }
 
-        private static (float, float) RateStarter(string newWord, (string word, CharDictionary letters, List<string> possible) correct, int depth)
+        private static (float, float) RateStarter(string newWord, int possibleCount, string correctWord, CharDictionary correctLetters, int depth)
         {
             if (depth == 6)
-                return (0, 5);
+                return (0, depth);
             knownLetters.Clear();
             grey.Clear();
             yellow.Clear();
@@ -175,10 +179,10 @@
             for (int i = 0; i < newWord.Length; i++)
             {
                 char c = newWord[i];
-                if (correct.letters.Contains(c))
+                if (correctLetters.Contains(c))
                 {
                     knownLetters.Add(c);
-                    if (correct.word[i] == c)
+                    if (correctWord[i] == c)
                         green.Add(c, i);
                     else
                         yellow.Add(c, i);
@@ -186,23 +190,25 @@
                 else
                     grey.Add(c);
             }
-            for (int i = 0; i < correct.possible.Count;)
+            int count = 0;
+            int prev = depth - 1;
+            for (int i = 0; i < possibleCount; i++)
             {
-                string word = correct.possible[i];
-                if (knownLetters.MatchWord(possibleLetters![word], correct.letters) || grey.MatchWord(word) || yellow.MatchWord(word) || green.MatchWord(word))
-                    correct.possible.RemoveAt(i);
-                else
-                    i++;
+                string word = possible[prev][i];
+                if (word == correctWord || knownLetters.MatchWord(possibleLetters![word], correctLetters) || grey.MatchWord(word) || yellow.MatchWord(word) || green.MatchWord(word))
+                    continue;
+                possible[depth][count++] = word;
             }
             float succes = 1;
             float avr = depth;
-            foreach (string word in correct.possible)
+            for (int i = 0; i < count; i++)
             {
-                (float a, float b) = RateStarter(word, (correct.word, correct.letters, [.. correct.possible]), depth + 1);
+                (float a, float b) = RateStarter(possible[depth][i], count, correctWord, correctLetters, depth + 1);
                 succes += a;
                 avr += b;
             }
-            return (succes / (correct.possible.Count + 1), avr / (correct.possible.Count + 1));
+            count++;
+            return (succes / count, avr / count);
         }
 
         private static List<string> GetAll()
